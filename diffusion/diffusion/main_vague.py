@@ -273,6 +273,7 @@ def main():
     plt.ion()
 
     cbar = None   # colorbar créée au 1er affichage
+    plt.tight_layout()
 
     for step in range(args.nsteps):
 
@@ -309,7 +310,8 @@ def main():
             cbar = fig.colorbar(cf, cax=cax)
             cbar.set_label("Température [°C]")
 
-        plt.tight_layout()
+        
+        
         plt.pause(0.02)
 
     print("Simulation terminée.")
