@@ -220,16 +220,16 @@ def build_wavy_wall_mesh(layer_thicknesses=None, H=0.45,
                           n_pts=60, order=1, cl=0.008):
     """
     Build a 2D FEM mesh for a multilayer wall with wavy internal interfaces.
-
+ 
     The wall geometry:
       - x axis : thickness direction (diffusion direction, from InnerBoundary to OuterBoundary)
       - y axis : height direction
       - outer boundaries (x=0 and x=L) : straight vertical lines
       - internal interfaces : x_interface(y) = x_nominal + A * sin(2π * freq * y / H)
-
+ 
     This creates a sinusoidal waviness at each layer interface, which affects the
     local heat flux and creates 2-D effects invisible in a 1-D model.
-
+ 
     Parameters
     ----------
     layer_thicknesses : list of float
@@ -249,7 +249,7 @@ def build_wavy_wall_mesh(layer_thicknesses=None, H=0.45,
         Polynomial order of the FE elements (1 = P1 triangles).
     cl : float
         Target mesh size [m].
-
+ 
     Returns
     -------
     elemType, nodeTags, nodeCoords, elemTags, elemNodeTags, bnds, bnds_tags
@@ -257,13 +257,13 @@ def build_wavy_wall_mesh(layer_thicknesses=None, H=0.45,
     """
     import gmsh
     import numpy as np
-
+ 
     if layer_thicknesses is None:
         layer_thicknesses = [0.15, 0.15, 0.15]
-
+ 
     nb_layers = len(layer_thicknesses)
     x_bases = np.concatenate([[0.0], np.cumsum(layer_thicknesses)])
-
+ 
     # Safety check
     min_thick = min(layer_thicknesses)
     if amplitude >= min_thick / 2.0:
@@ -271,9 +271,9 @@ def build_wavy_wall_mesh(layer_thicknesses=None, H=0.45,
             f"amplitude={amplitude} >= min_layer_thickness/2={min_thick/2:.4f}. "
             "Interfaces would overlap. Reduce amplitude."
         )
-
+ 
     y_pts = np.linspace(0.0, H, n_pts)
-
+ 
     # ------------------------------------------------------------------
     # 1.  Create interface curves
     #     - outer boundaries (i=0 and i=nb_layers): straight addLine
@@ -282,10 +282,10 @@ def build_wavy_wall_mesh(layer_thicknesses=None, H=0.45,
     all_bottom_pts  = []   # GMSH tag of the bottom point of each interface
     all_top_pts     = []   # GMSH tag of the top    point of each interface
     interface_curves = []  # GMSH curve tag for each interface
-
+ 
     for i, x_base in enumerate(x_bases):
         is_outer = (i == 0 or i == nb_layers)
-
+ 
         if is_outer:
             # Straight vertical boundary
             pt_b = gmsh.model.geo.addPoint(float(x_base), 0.0,   0.0, cl)
@@ -293,7 +293,7 @@ def build_wavy_wall_mesh(layer_thicknesses=None, H=0.45,
             curve = gmsh.model.geo.addLine(pt_b, pt_t)
             all_bottom_pts.append(pt_b)
             all_top_pts.append(pt_t)
-
+ 
         else:
             # Wavy interface – spline through n_pts control points
             # sin(2π·freq·y/H) is 0 at y=0 and y=H when freq is an integer
@@ -306,9 +306,9 @@ def build_wavy_wall_mesh(layer_thicknesses=None, H=0.45,
             curve = gmsh.model.geo.addSpline(pts)
             all_bottom_pts.append(pts[0])
             all_top_pts.append(pts[-1])
-
+ 
         interface_curves.append(curve)
-
+ 
     # ------------------------------------------------------------------
     # 2.  Create one surface per layer
     #     Each layer i is bounded by:
@@ -320,7 +320,7 @@ def build_wavy_wall_mesh(layer_thicknesses=None, H=0.45,
     for i in range(nb_layers):
         l_bot = gmsh.model.geo.addLine(all_bottom_pts[i], all_bottom_pts[i + 1])
         l_top = gmsh.model.geo.addLine(all_top_pts[i + 1], all_top_pts[i])
-
+ 
         cloop = gmsh.model.geo.addCurveLoop([
             l_bot,
              interface_curves[i + 1],
@@ -328,28 +328,28 @@ def build_wavy_wall_mesh(layer_thicknesses=None, H=0.45,
             -interface_curves[i],
         ])
         gmsh.model.geo.addPlaneSurface([cloop])
-
+ 
     gmsh.model.geo.synchronize()
-
+ 
     # ------------------------------------------------------------------
     # 3.  Physical groups for boundary conditions
     # ------------------------------------------------------------------
     gmsh.model.addPhysicalGroup(1, [interface_curves[0]],         tag=1)
     gmsh.model.setPhysicalName(1, 1, "InnerBoundary")
-
+ 
     gmsh.model.addPhysicalGroup(1, [interface_curves[nb_layers]], tag=2)
     gmsh.model.setPhysicalName(1, 2, "OuterBoundary")
-
+ 
     # ------------------------------------------------------------------
     # 4.  Mesh & extract data
     # ------------------------------------------------------------------
     gmsh.model.mesh.generate(2)
     gmsh.model.mesh.setOrder(order)
-
+ 
     elemType  = gmsh.model.mesh.getElementType("triangle", order)
     nodeTags, nodeCoords, _ = gmsh.model.mesh.getNodes()
     elemTags, elemNodeTags  = gmsh.model.mesh.getElementsByType(elemType)
-
+ 
     bnds = [('InnerBoundary', 1), ('OuterBoundary', 1)]
     bnds_tags = []
     for name, dim in bnds:
@@ -359,5 +359,5 @@ def build_wavy_wall_mesh(layer_thicknesses=None, H=0.45,
                     gmsh.model.mesh.getNodesForPhysicalGroup(dim, t[1])[0]
                 )
                 break
-
+ 
     return elemType, nodeTags, nodeCoords, elemTags, elemNodeTags, bnds, bnds_tags
